@@ -8,18 +8,19 @@ from multiprocessing import Pool
 import random
 
 # Ayar değerleri (en üstte)
-LEFT_VALUES = [10, 15, 20, 25]
-RIGHT_VALUES = [10, 15, 20, 25]
-MANIPULATION_THRESHOLD_VALUES = [0.005,0.007,0.008 ,0.01]
-MAX_CANDLES_VALUES = [25]
+LEFT_VALUES = [5,10, 15, 20, 25,30]
+RIGHT_VALUES = [5,10, 15, 20, 25,30]
+MANIPULATION_THRESHOLD_VALUES = [0.0015,0.003,0.005,0.008 ,0.01]
+MAX_CANDLES_VALUES = [15,30]
 CONSECUTIVE_CANDLES_VALUES = [2, 3, 4]
-MIN_CANDLES_FOR_SECOND_CONDITION_VALUES = [5, 10, 15]
-MAX_CANDLES_FOR_SECOND_CONDITION_VALUES = [20, 25, 30]
+MIN_CANDLES_FOR_SECOND_CONDITION_VALUES = [5, 10, 15,20]
+MAX_CANDLES_FOR_SECOND_CONDITION_VALUES = [15,20, 25,30]
 RISK_REWARD_RATIO_VALUES = [1.5]
 
 # Veri dosyaları
 DATA_FILES = [
-    "btc_usdt_15m-1yil.csv"
+    "btc_usdt_15m-3yil.csv"
+    
 ]
 
 # Ağırlıklar (BTC-USDT chartlarına daha fazla ağırlık)
@@ -28,7 +29,7 @@ WEIGHTS = {
     "eth_usdt_15m.csv": 0.4,
     "sol_usdt_15m.csv": 0.4,
     "btc_usdt_15m-1yil.csv": 1,
-    "btc_usdt_15m-3yil.csv": 0.6
+    "btc_usdt_15m-3yil.csv": 1
 }
 
 # Verileri bir kez yükle ve önbelleğe al
@@ -68,8 +69,8 @@ def test_combination(combo):
                 # Aylık başarı oranlarını hesapla (tüm aylar dahil)
                 if trades:
                     trade_data = pd.DataFrame(trades)
-                    trade_data['exit_time'] = pd.to_datetime(trade_data['exit_time'])
-                    trade_data['month'] = trade_data['exit_time'].dt.tz_localize(None).dt.to_period('M')
+                    trade_data['exit_time'] = pd.to_datetime(trade_data['exit_time']).dt.tz_localize(None)  # Saat dilimini kaldır
+                    trade_data['month'] = trade_data['exit_time'].dt.to_period('M')
                     
                     monthly_success = trade_data.groupby('month').apply(
                         lambda x: len(x[x['profit'] > 0]) / len(x) * 100 if len(x) > 0 else 0
@@ -89,13 +90,28 @@ def test_combination(combo):
         avg_success_rate = sum(all_monthly_rates) / len(all_monthly_rates) if all_monthly_rates else 0
         min_success_rate = min(all_monthly_rates) if all_monthly_rates else 0
 
+        # Sharpe Ratio hesaplama
+        trade_df = pd.DataFrame(all_trades)
+        trade_df['exit_time'] = pd.to_datetime(trade_df['exit_time']).dt.tz_localize(None)  # Saat dilimini kaldır
+        monthly_profits = trade_df.groupby(trade_df['exit_time'].dt.to_period('M'))['profit'].sum()
+        mean_monthly_profit = monthly_profits.mean()
+        std_monthly_profit = monthly_profits.std()
+        sharpe_ratio = mean_monthly_profit / std_monthly_profit if std_monthly_profit != 0 else 0
+
+        # Profit Factor hesaplama
+        gross_profit = trade_df[trade_df['profit'] > 0]['profit'].sum()
+        gross_loss = abs(trade_df[trade_df['profit'] < 0]['profit'].sum())
+        profit_factor = gross_profit / gross_loss if gross_loss != 0 else 10  # Üst sınır 10
+
         return {
             'combination': combo,
             'file_results': file_results,
             'weighted_profit': weighted_profit,
             'total_success_rate': total_success_rate,
             'avg_success_rate': avg_success_rate,
-            'min_success_rate': min_success_rate
+            'min_success_rate': min_success_rate,
+            'sharpe_ratio': sharpe_ratio,
+            'profit_factor': profit_factor
         }
     except Exception as e:
         print(f"Kombinasyon {combo} için genel hata: {e}")
@@ -105,7 +121,9 @@ def test_combination(combo):
             'weighted_profit': float('-inf'),
             'total_success_rate': 0,
             'avg_success_rate': 0,
-            'min_success_rate': 0
+            'min_success_rate': 0,
+            'sharpe_ratio': 0,
+            'profit_factor': 0
         }
 
 def run_optimization():
@@ -158,14 +176,45 @@ def run_optimization():
         print("\nToplam başarı oranı %40 ve üstü sağlayan kombinasyon bulunamadı.")
         return
 
-    # Sonuçları toplam başarı oranına göre sırala
-    valid_results.sort(key=lambda x: x['total_success_rate'], reverse=True)
+    # Normalize etme için min ve max değerleri hesapla
+    profits = [r['weighted_profit'] for r in valid_results]
+    sharpe_ratios = [max(0, r['sharpe_ratio']) for r in valid_results]  # Negatifleri 0'a çek
+    profit_factors = [min(10, r['profit_factor']) for r in valid_results]  # Üst sınır 10
 
-    # En başarılı 5 kombinasyonu yazdır
-    print(f"\n=== En Yüksek Toplam Başarı Oranına Sahip 5 Setup (Toplam {len(valid_results)} adet) ===")
-    for i, result in enumerate(valid_results[:5]):
+    min_profit = min(profits)
+    max_profit = max(profits)
+    profit_range = max_profit - min_profit if max_profit != min_profit else 1
+
+    min_sharpe = min(sharpe_ratios)
+    max_sharpe = max(sharpe_ratios)
+    sharpe_range = max_sharpe - min_sharpe if max_sharpe != min_sharpe else 1
+
+    min_pf = min(profit_factors)
+    max_pf = max(profit_factors)
+    pf_range = max_pf - min_pf if max_pf != min_pf else 1
+
+    # Kombinasyon skoru hesaplama
+    for result in valid_results:
+        normalized_profit = ((result['weighted_profit'] - min_profit) / profit_range) * 100
+        normalized_sharpe = ((max(0, result['sharpe_ratio']) - min_sharpe) / sharpe_range) * 100 if sharpe_range != 0 else 0
+        normalized_pf = ((min(10, result['profit_factor']) - min_pf) / pf_range) * 100
+        # Skor: Her metrik %25 ağırlık
+        result['combined_score'] = (0.25 * result['total_success_rate'] + 
+                                    0.25 * normalized_profit + 
+                                    0.25 * normalized_sharpe + 
+                                    0.25 * normalized_pf)
+        # Hata ayıklama için normalize edilmiş değerleri yazdır
+        print(f"Debug - Kombinasyon: {result['combination']}")
+        print(f"Normalized Profit: {normalized_profit:.2f}, Normalized Sharpe: {normalized_sharpe:.2f}, Normalized PF: {normalized_pf:.2f}")
+
+    # Sonuçları kombinasyon skoruna göre sırala
+    valid_results.sort(key=lambda x: x['combined_score'], reverse=True)
+
+    # En iyi 20 kombinasyonu yazdır
+    print(f"\n=== Başarı, Kâr, Sharpe ve Profit Factor Kombinasyonuna Göre En İyi 20 Setup (Toplam {len(valid_results)} adet) ===")
+    for i, result in enumerate(valid_results[:50]):
         combo = result['combination']
-        print(f"\n{i + 1}. Kombinasyon:")
+        print(f"\n{i + 1}. Kombinasyon (Skor: {result['combined_score']:.2f}):")
         print(f"LEFT: {combo[0]}, RIGHT: {combo[1]}, MANIPULATION_THRESHOLD: {combo[2]}, "
               f"MAX_CANDLES: {combo[3]}, CONSECUTIVE_CANDLES: {combo[4]}, "
               f"MIN_CANDLES_FOR_SECOND_CONDITION: {combo[5]}, MAX_CANDLES_FOR_SECOND_CONDITION: {combo[6]}, "
@@ -174,6 +223,8 @@ def run_optimization():
         print(f"Ortalama Aylık Başarı Oranı: {result['avg_success_rate']:.2f}%")
         print(f"Minimum Aylık Başarı Oranı: {result['min_success_rate']:.2f}%")
         print(f"Ağırlıklı Kâr: {result['weighted_profit']:.2f} USD")
+        print(f"Sharpe Ratio: {result['sharpe_ratio']:.2f}")
+        print(f"Profit Factor: {result['profit_factor']:.2f}")
 
     # Toplam süreyi yazdır
     total_time = time.time() - start_time

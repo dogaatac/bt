@@ -4,6 +4,7 @@ from engine import run_engine, print_trades, print_summary
 from plotter import plot_trades
 from tabulate import tabulate
 import pandas as pd
+import numpy as np
 
 def get_user_input():
     # Grafik basılıp basılmayacağı
@@ -42,6 +43,27 @@ def get_user_input():
         config.RISK_REWARD_RATIO = float(input(f"Risk-Kazanç oranı (varsayılan: {config.RISK_REWARD_RATIO}): ") or config.RISK_REWARD_RATIO)
         config.INITIAL_BALANCE = float(input(f"Başlangıç bakiyesi (varsayılan: {config.INITIAL_BALANCE}): ") or config.INITIAL_BALANCE)
         config.MAX_RISK = float(input(f"Maksimum risk (varsayılan: {config.MAX_RISK}): ") or config.MAX_RISK)
+
+    # Sabit miktar mı, kasa yüzdesi mi?
+    while True:
+        risk_type = input("Her trade'de sabit miktar mı yoksa kasa yüzdesi mi kullanılsın? (sabit/yüzde): ").lower()
+        if risk_type in ['sabit', 'yüzde']:
+            break
+        print("Lütfen 'sabit' veya 'yüzde' girin.")
+
+    if risk_type == 'yüzde':
+        while True:
+            try:
+                risk_percentage = float(input("Kasa yüzdesi olarak risk oranı (%): "))
+                if 0 < risk_percentage <= 100:
+                    config.RISK_TYPE = 'percentage'
+                    config.RISK_PERCENTAGE = risk_percentage / 100  # Yüzdeyi ondalık sayıya çevir
+                    break
+                print("Lütfen 0 ile 100 arasında bir değer girin.")
+            except ValueError:
+                print("Lütfen geçerli bir sayı girin.")
+    else:
+        config.RISK_TYPE = 'fixed'
 
     # Print biçimi
     while True:
@@ -82,7 +104,6 @@ def create_monthly_table(trades):
         tp_trades = len(month_trades[month_trades['exit_price'] == month_trades['tp']])
         sl_trades = len(month_trades[month_trades['exit_price'] == month_trades['sl']])
         
-        # loc ile güvenli atama
         monthly_stats.loc[monthly_stats['Ay'] == month, 'Başarı Oranı (%)'] = (profitable_trades / total_trades * 100) if total_trades > 0 else 0
         monthly_stats.loc[monthly_stats['Ay'] == month, 'TP İşlem'] = tp_trades
         monthly_stats.loc[monthly_stats['Ay'] == month, 'SL İşlem'] = sl_trades
@@ -92,17 +113,50 @@ def create_monthly_table(trades):
     monthly_stats['Başarı Oranı (%)'] = monthly_stats['Başarı Oranı (%)'].round(2)
     monthly_stats['Ay'] = monthly_stats['Ay'].astype(str)  # Dönemleri string'e çevir
     
+    # Tüm ayların toplam ve ortalamalarını hesapla
+    total_trades = monthly_stats['Trade Sayısı'].sum()
+    total_profit = monthly_stats['Kâr/Zarar (USD)'].sum()
+    total_success_rate = (len(trade_data[trade_data['profit'] > 0]) / len(trade_data) * 100) if len(trade_data) > 0 else 0
+    total_tp = monthly_stats['TP İşlem'].sum()
+    total_sl = monthly_stats['SL İşlem'].sum()
+
+    # Sharpe Ratio hesaplama
+    monthly_profits = trade_data.groupby('month')['profit'].sum()
+    mean_monthly_profit = monthly_profits.mean()
+    std_monthly_profit = monthly_profits.std()
+    sharpe_ratio = mean_monthly_profit / std_monthly_profit if std_monthly_profit != 0 else 0
+
+    # Profit Factor hesaplama
+    gross_profit = trade_data[trade_data['profit'] > 0]['profit'].sum()
+    gross_loss = abs(trade_data[trade_data['profit'] < 0]['profit'].sum())
+    profit_factor = gross_profit / gross_loss if gross_loss != 0 else float('inf')
+
+    # Özet satırını ekle
+    summary_row = pd.DataFrame({
+        'Ay': ['Toplam/Ort'],
+        'Trade Sayısı': [total_trades],
+        'Kâr/Zarar (USD)': [total_profit],
+        'Başarı Oranı (%)': [total_success_rate],
+        'TP İşlem': [total_tp],
+        'SL İşlem': [total_sl]
+    })
+    monthly_stats = pd.concat([monthly_stats, summary_row], ignore_index=True)
+    
     # Tabulate ile tabloyu ekrana yazdır
     table = tabulate(
         monthly_stats,
         headers=['Ay', 'Trade Sayısı', 'Kâr/Zarar (USD)', 'Başarı Oranı (%)', 'TP İşlem', 'SL İşlem'],
-        tablefmt='pretty',
+        tablefmt='simple',
         floatfmt=".2f",
         numalign="right",
-        stralign="center"
+        stralign="left"
     )
     print("\nAylık Backtest Sonuçları:")
     print(table)
+    
+    # Sharpe Ratio ve Profit Factor'ü tablodan sonra yazdır
+    print(f"\nSharpe Ratio: {sharpe_ratio:.2f}")
+    print(f"Profit Factor: {profit_factor:.2f}")
     
     # Tabloyu CSV dosyasına kaydet
     monthly_stats.to_csv('monthly_backtest_results.csv', index=False)

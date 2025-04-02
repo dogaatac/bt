@@ -48,7 +48,6 @@ def run_engine(config, data_cache=None):
 
     # Başlangıç parametreleri
     balance = config.INITIAL_BALANCE
-    max_risk = config.MAX_RISK
     positions = []
     trades = []
     used_pivots = set()
@@ -105,7 +104,7 @@ def run_engine(config, data_cache=None):
                 manip_high = max(manip_high, current_high)
                 sweeps_pl[sweeps_pl.index(sweep)] = (pl_idx, pl_price, sweep_low, sweep_idx, manip_low, manip_high)
 
-            # Birinci Koşul: En az 2 ardışık mum pivot low’un üstünde kapanırsa
+            # Birinci Koşul: En az 4 ardışık mum pivot low’un üstünde kapanırsa
             if bars_since_sweep >= config.CONSECUTIVE_CANDLES:
                 closes_above = all(float(close[i - j]) > pl_price for j in range(config.CONSECUTIVE_CANDLES))
                 if closes_above:
@@ -114,7 +113,12 @@ def run_engine(config, data_cache=None):
                         sl_price = manip_low
                         sl_distance = entry_price - sl_price
                         if sl_distance > 0:
-                            position_size = max_risk / sl_distance
+                            # Risk miktarını güncel bakiyeye göre hesapla
+                            if config.RISK_TYPE == 'fixed':
+                                risk_amount = config.INITIAL_BALANCE * config.MAX_RISK
+                            else:  # config.RISK_TYPE == 'percentage'
+                                risk_amount = balance * config.RISK_PERCENTAGE
+                            position_size = risk_amount / sl_distance
                             tp_price = entry_price + sl_distance * config.RISK_REWARD_RATIO
                             positions.append({
                                 'type': 'long',
@@ -127,12 +131,13 @@ def run_engine(config, data_cache=None):
                                 'sweep_low': sweep_low,
                                 'sweep_time': index[sweep_idx],
                                 'manip_low': manip_low,
-                                'manip_high': manip_high
+                                'manip_high': manip_high,
+                                'risk_amount': risk_amount
                             })
                             sweeps_pl.remove(sweep)
                             break
 
-            # İkinci Koşul: Fiyat pivot low’un altında 5-15 mum kapanış yapıp geri dönerse
+            # İkinci Koşul: Fiyat pivot low’un altında 5-20 mum kapanış yapıp geri dönerse
             if bars_since_sweep >= config.MIN_CANDLES_FOR_SECOND_CONDITION:
                 closes_below = all(float(close[i - j]) < pl_price for j in range(config.MIN_CANDLES_FOR_SECOND_CONDITION, min(bars_since_sweep + 1, config.MAX_CANDLES_FOR_SECOND_CONDITION + 1)))
                 if closes_below and current_close > pl_price:
@@ -141,7 +146,12 @@ def run_engine(config, data_cache=None):
                         sl_price = manip_low
                         sl_distance = entry_price - sl_price
                         if sl_distance > 0:
-                            position_size = max_risk / sl_distance
+                            # Risk miktarını güncel bakiyeye göre hesapla
+                            if config.RISK_TYPE == 'fixed':
+                                risk_amount = config.INITIAL_BALANCE * config.MAX_RISK
+                            else:  # config.RISK_TYPE == 'percentage'
+                                risk_amount = balance * config.RISK_PERCENTAGE
+                            position_size = risk_amount / sl_distance
                             tp_price = entry_price + sl_distance * config.RISK_REWARD_RATIO
                             positions.append({
                                 'type': 'long',
@@ -154,7 +164,8 @@ def run_engine(config, data_cache=None):
                                 'sweep_low': sweep_low,
                                 'sweep_time': index[sweep_idx],
                                 'manip_low': manip_low,
-                                'manip_high': manip_high
+                                'manip_high': manip_high,
+                                'risk_amount': risk_amount
                             })
                             sweeps_pl.remove(sweep)
                             break
@@ -173,7 +184,7 @@ def run_engine(config, data_cache=None):
                 manip_high = max(manip_high, current_high)
                 sweeps_ph[sweeps_ph.index(sweep)] = (ph_idx, ph_price, sweep_high, sweep_idx, manip_low, manip_high)
 
-            # Birinci Koşul: En az 2 ardışık mum pivot high’ın altında kapanırsa
+            # Birinci Koşul: En az 4 ardışık mum pivot high’ın altında kapanırsa
             if bars_since_sweep >= config.CONSECUTIVE_CANDLES:
                 closes_below = all(float(close[i - j]) < ph_price for j in range(config.CONSECUTIVE_CANDLES))
                 if closes_below:
@@ -182,7 +193,12 @@ def run_engine(config, data_cache=None):
                         sl_price = manip_high
                         sl_distance = sl_price - entry_price
                         if sl_distance > 0:
-                            position_size = max_risk / sl_distance
+                            # Risk miktarını güncel bakiyeye göre hesapla
+                            if config.RISK_TYPE == 'fixed':
+                                risk_amount = config.INITIAL_BALANCE * config.MAX_RISK
+                            else:  # config.RISK_TYPE == 'percentage'
+                                risk_amount = balance * config.RISK_PERCENTAGE
+                            position_size = risk_amount / sl_distance
                             tp_price = entry_price - sl_distance * config.RISK_REWARD_RATIO
                             positions.append({
                                 'type': 'short',
@@ -195,12 +211,13 @@ def run_engine(config, data_cache=None):
                                 'sweep_high': sweep_high,
                                 'sweep_time': index[sweep_idx],
                                 'manip_low': manip_low,
-                                'manip_high': manip_high
+                                'manip_high': manip_high,
+                                'risk_amount': risk_amount
                             })
                             sweeps_ph.remove(sweep)
                             break
 
-            # İkinci Koşul: Fiyat pivot high’ın üstünde 5-15 mum kapanış yapıp geri dönerse
+            # İkinci Koşul: Fiyat pivot high’ın üstünde 5-20 mum kapanış yapıp geri dönerse
             if bars_since_sweep >= config.MIN_CANDLES_FOR_SECOND_CONDITION:
                 closes_above = all(float(close[i - j]) > ph_price for j in range(config.MIN_CANDLES_FOR_SECOND_CONDITION, min(bars_since_sweep + 1, config.MAX_CANDLES_FOR_SECOND_CONDITION + 1)))
                 if closes_above and current_close < ph_price:
@@ -209,7 +226,12 @@ def run_engine(config, data_cache=None):
                         sl_price = manip_high
                         sl_distance = sl_price - entry_price
                         if sl_distance > 0:
-                            position_size = max_risk / sl_distance
+                            # Risk miktarını güncel bakiyeye göre hesapla
+                            if config.RISK_TYPE == 'fixed':
+                                risk_amount = config.INITIAL_BALANCE * config.MAX_RISK
+                            else:  # config.RISK_TYPE == 'percentage'
+                                risk_amount = balance * config.RISK_PERCENTAGE
+                            position_size = risk_amount / sl_distance
                             tp_price = entry_price - sl_distance * config.RISK_REWARD_RATIO
                             positions.append({
                                 'type': 'short',
@@ -222,7 +244,8 @@ def run_engine(config, data_cache=None):
                                 'sweep_high': sweep_high,
                                 'sweep_time': index[sweep_idx],
                                 'manip_low': manip_low,
-                                'manip_high': manip_high
+                                'manip_high': manip_high,
+                                'risk_amount': risk_amount
                             })
                             sweeps_ph.remove(sweep)
                             break
@@ -231,7 +254,7 @@ def run_engine(config, data_cache=None):
         for pos in positions[:]:
             if pos['type'] == 'long':
                 if current_low <= pos['sl']:
-                    profit = -max_risk
+                    profit = -pos['risk_amount']
                     balance += profit
                     trades.append({
                         'entry_time': pos['entry_time'],
@@ -247,11 +270,12 @@ def run_engine(config, data_cache=None):
                         'sweep_low': pos['sweep_low'],
                         'sweep_time': pos['sweep_time'],
                         'manip_low': pos['manip_low'],
-                        'manip_high': pos['manip_high']
+                        'manip_high': pos['manip_high'],
+                        'risk_amount': pos['risk_amount']
                     })
                     positions.remove(pos)
                 elif current_high >= pos['tp']:
-                    profit = max_risk * config.RISK_REWARD_RATIO
+                    profit = pos['risk_amount'] * config.RISK_REWARD_RATIO
                     balance += profit
                     trades.append({
                         'entry_time': pos['entry_time'],
@@ -267,12 +291,13 @@ def run_engine(config, data_cache=None):
                         'sweep_low': pos['sweep_low'],
                         'sweep_time': pos['sweep_time'],
                         'manip_low': pos['manip_low'],
-                        'manip_high': pos['manip_high']
+                        'manip_high': pos['manip_high'],
+                        'risk_amount': pos['risk_amount']
                     })
                     positions.remove(pos)
             elif pos['type'] == 'short':
                 if current_high >= pos['sl']:
-                    profit = -max_risk
+                    profit = -pos['risk_amount']
                     balance += profit
                     trades.append({
                         'entry_time': pos['entry_time'],
@@ -288,11 +313,12 @@ def run_engine(config, data_cache=None):
                         'sweep_high': pos['sweep_high'],
                         'sweep_time': pos['sweep_time'],
                         'manip_low': pos['manip_low'],
-                        'manip_high': pos['manip_high']
+                        'manip_high': pos['manip_high'],
+                        'risk_amount': pos['risk_amount']
                     })
                     positions.remove(pos)
                 elif current_low <= pos['tp']:
-                    profit = max_risk * config.RISK_REWARD_RATIO
+                    profit = pos['risk_amount'] * config.RISK_REWARD_RATIO
                     balance += profit
                     trades.append({
                         'entry_time': pos['entry_time'],
@@ -308,7 +334,8 @@ def run_engine(config, data_cache=None):
                         'sweep_high': pos['sweep_high'],
                         'sweep_time': pos['sweep_time'],
                         'manip_low': pos['manip_low'],
-                        'manip_high': pos['manip_high']
+                        'manip_high': pos['manip_high'],
+                        'risk_amount': pos['risk_amount']
                     })
                     positions.remove(pos)
 
@@ -328,11 +355,13 @@ def print_trades(trades, print_format):
                       f"Entry: {trade['entry_price']:.2f}, "
                       f"SL: {trade['sl']:.2f}, "
                       f"TP: {trade['tp']:.2f}, "
-                      f"Profit: {trade['profit']:.2f} USD")
+                      f"Profit: {trade['profit']:.2f} USD, "
+                      f"Risk Amount: {trade['risk_amount']:.2f} USD")
             elif print_format == 'simple':
                 print(f"{Fore.GREEN}Long İşlem{Style.RESET_ALL} - "
                       f"Entry: {trade['entry_price']:.2f}, "
-                      f"Profit: {trade['profit']:.2f} USD")
+                      f"Profit: {trade['profit']:.2f} USD, "
+                      f"Risk: {trade['risk_amount']:.2f} USD")
         elif trade['type'] == 'short':
             if print_format == 'detailed':
                 print(f"{Fore.RED}Short İşlem{Style.RESET_ALL} - "
@@ -344,11 +373,13 @@ def print_trades(trades, print_format):
                       f"Entry: {trade['entry_price']:.2f}, "
                       f"SL: {trade['sl']:.2f}, "
                       f"TP: {trade['tp']:.2f}, "
-                      f"Profit: {trade['profit']:.2f} USD")
+                      f"Profit: {trade['profit']:.2f} USD, "
+                      f"Risk Amount: {trade['risk_amount']:.2f} USD")
             elif print_format == 'simple':
                 print(f"{Fore.RED}Short İşlem{Style.RESET_ALL} - "
                       f"Entry: {trade['entry_price']:.2f}, "
-                      f"Profit: {trade['profit']:.2f} USD")
+                      f"Profit: {trade['profit']:.2f} USD, "
+                      f"Risk: {trade['risk_amount']:.2f} USD")
 
 def print_summary(initial_balance, final_balance, trades):
     print(f"\n{Fore.CYAN}Başlangıç Bakiyesi: {initial_balance} USD{Style.RESET_ALL}")
