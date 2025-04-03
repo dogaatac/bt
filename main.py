@@ -5,6 +5,37 @@ from plotter import plot_trades
 from tabulate import tabulate
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+
+# Varsayılan başlangıç kasası (config'den alınır, yoksa sabit bir değer)
+INITIAL_CAPITAL = getattr(config, 'INITIAL_BALANCE', 10000)  # config.py'dan alır, yoksa 10,000 USD
+
+def plot_equity_curve(trades, initial_capital):
+    """Kasa eğrisini grafik olarak çizer."""
+    if not trades:
+        print("Grafik çizilecek trade verisi yok.")
+        return
+
+    # Trade verilerini DataFrame'e çevir
+    trade_df = pd.DataFrame(trades)
+    trade_df['exit_time'] = pd.to_datetime(trade_df['exit_time']).dt.tz_localize(None)
+
+    # Kümülatif kâr/zarar hesaplama
+    trade_df['cumulative_profit'] = trade_df['profit'].cumsum()
+    trade_df['equity'] = initial_capital + trade_df['cumulative_profit']
+
+    # Grafik çizimi
+    plt.figure(figsize=(12, 6))
+    plt.plot(trade_df['exit_time'], trade_df['equity'], label='Kasa (Equity)', color='blue')
+    plt.axhline(y=initial_capital, color='gray', linestyle='--', label='Başlangıç Kasası')
+    plt.title('Kasa Zaman İçindeki Değişimi')
+    plt.xlabel('Zaman')
+    plt.ylabel('Kasa (USD)')
+    plt.legend()
+    plt.grid(True)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
 
 def get_user_input():
     # Grafik basılıp basılmayacağı
@@ -12,6 +43,14 @@ def get_user_input():
         plot_choice = input("Grafikler basılsın mı? (e/h): ").lower()
         if plot_choice in ['e', 'h']:
             plot_enabled = (plot_choice == 'e')
+            break
+        print("Lütfen 'e' (evet) veya 'h' (hayır) girin.")
+
+    # Kasa eğrisi grafiği
+    while True:
+        equity_plot_choice = input("Kasa eğrisi grafiği basılsın mı? (e/h): ").lower()
+        if equity_plot_choice in ['e', 'h']:
+            equity_plot_enabled = (equity_plot_choice == 'e')
             break
         print("Lütfen 'e' (evet) veya 'h' (hayır) girin.")
 
@@ -67,12 +106,12 @@ def get_user_input():
 
     # Print biçimi
     while True:
-        print_format = input("Print biçimi (detailed/simple): ").lower()
-        if print_format in ['detailed', 'simple']:
+        print_format = input("Print biçimi (detailed/simple/grafik): ").lower()
+        if print_format in ['detailed', 'simple', 'grafik']:
             break
-        print("Lütfen 'detailed' veya 'simple' girin.")
+        print("Lütfen 'detailed', 'simple' veya 'grafik' girin.")
 
-    return plot_enabled, table_enabled, print_format
+    return plot_enabled, equity_plot_enabled, table_enabled, print_format
 
 def create_monthly_table(trades):
     if not trades:
@@ -164,13 +203,16 @@ def create_monthly_table(trades):
 
 def main():
     # Kullanıcıdan giriş al
-    plot_enabled, table_enabled, print_format = get_user_input()
+    plot_enabled, equity_plot_enabled, table_enabled, print_format = get_user_input()
 
     # Algoritmayı çalıştır
     df, trades, final_balance = run_engine(config)
 
     # İşlem detaylarını yazdır
-    print_trades(trades, print_format)
+    if print_format == 'grafik':
+        plot_equity_curve(trades, config.INITIAL_BALANCE)
+    else:
+        print_trades(trades, print_format)
 
     # Özet bilgileri yazdır
     print_summary(config.INITIAL_BALANCE, final_balance, trades)
@@ -184,6 +226,12 @@ def main():
         print("\nGrafikler çiziliyor...")
         plot_trades(df, trades, config)
         print("Grafikler tamamlandı!")
+
+    # Kasa eğrisi grafiğini çiz (eğer kullanıcı isterse)
+    if equity_plot_enabled:
+        print("\nKasa eğrisi grafiği çiziliyor...")
+        plot_equity_curve(trades, config.INITIAL_BALANCE)
+        print("Kasa eğrisi grafiği tamamlandı!")
 
 if __name__ == "__main__":
     main()

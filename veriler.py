@@ -21,7 +21,6 @@ end_timestamp = int(end_time.astimezone(pytz.UTC).timestamp() * 1000)
 # BTCUSDT Perpetual Futures için 15 dakikalık klines verilerini indir
 klines = client.futures_historical_klines(
 
-    symbol="SOLUSDT",           # BTC/USDT Perpetual kontrat sembolü
     symbol="BTCUSDT",           # BTC/USDT Perpetual kontrat sembolü
     interval="15m",             # 15 dakikalık zaman dilimi
     start_str=start_timestamp,  # Başlangıç zamanı (UTC)

@@ -8,18 +8,18 @@ from multiprocessing import Pool
 import random
 
 # Ayar değerleri (en üstte)
-LEFT_VALUES = [5,10, 15, 20, 25,30]
-RIGHT_VALUES = [5,10, 15, 20, 25,30]
+LEFT_VALUES = [5,15,20,25,30]
+RIGHT_VALUES = [5,15,15,20, 25,30]
 MANIPULATION_THRESHOLD_VALUES = [0.0015,0.003,0.005,0.008 ,0.01]
 MAX_CANDLES_VALUES = [15,30]
 CONSECUTIVE_CANDLES_VALUES = [2, 3, 4]
 MIN_CANDLES_FOR_SECOND_CONDITION_VALUES = [5, 10, 15,20]
 MAX_CANDLES_FOR_SECOND_CONDITION_VALUES = [15,20, 25,30]
-RISK_REWARD_RATIO_VALUES = [1.5]
+RISK_REWARD_RATIO_VALUES = [1.25,1.5]
 
 # Veri dosyaları
 DATA_FILES = [
-    "btc_usdt_15m-3yil.csv"
+    "btc_usdt_15m-1yil.csv"
     
 ]
 
@@ -199,13 +199,11 @@ def run_optimization():
         normalized_sharpe = ((max(0, result['sharpe_ratio']) - min_sharpe) / sharpe_range) * 100 if sharpe_range != 0 else 0
         normalized_pf = ((min(10, result['profit_factor']) - min_pf) / pf_range) * 100
         # Skor: Her metrik %25 ağırlık
-        result['combined_score'] = (0.25 * result['total_success_rate'] + 
-                                    0.25 * normalized_profit + 
-                                    0.25 * normalized_sharpe + 
-                                    0.25 * normalized_pf)
-        # Hata ayıklama için normalize edilmiş değerleri yazdır
-        print(f"Debug - Kombinasyon: {result['combination']}")
-        print(f"Normalized Profit: {normalized_profit:.2f}, Normalized Sharpe: {normalized_sharpe:.2f}, Normalized PF: {normalized_pf:.2f}")
+        result['combined_score'] = (0.20 * result['total_success_rate'] + 
+                                    0.50 * normalized_profit + 
+                                    0.15 * normalized_sharpe + 
+                                    0.15 * normalized_pf)
+
 
     # Sonuçları kombinasyon skoruna göre sırala
     valid_results.sort(key=lambda x: x['combined_score'], reverse=True)
