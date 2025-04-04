@@ -1,7 +1,7 @@
 # config.py
 
 # Veri dosyası ayarları
-DATA_FILE = "2yil.csv" 
+DATA_FILE = "1yil.csv" 
 
 # Pivot hesaplama parametreleri
 LEFT = 30  # Sol periyot

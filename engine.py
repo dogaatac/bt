@@ -67,8 +67,8 @@ def run_engine(config, data_cache=None):
         current_close = float(close[i])
 
         # Aktif pivotları kontrol et (son 200 bar)
-        active_ph = {k: v for k, v in ph_dict.items() if k > i - 200 and k < i}
-        active_pl = {k: v for k, v in pl_dict.items() if k > i - 200 and k < i}
+        active_ph = {k: v for k, v in ph_dict.items() if k > i - 250 and k < i}
+        active_pl = {k: v for k, v in pl_dict.items() if k > i - 250 and k < i}
 
         # Sell side sweep kontrolü (fiyat pivot high’ı aşarsa)
         for ph_idx, ph_price in active_ph.items():

@@ -12,12 +12,12 @@ import multiprocessing
 # Parametre aralıkları
 LEFT_VALUES = list(range(10, 30, 5))  # [10, 15, 20, 25]
 RIGHT_VALUES = list(range(10, 30, 5))  # [10, 15, 20, 25]
-MANIPULATION_THRESHOLD_VALUES = [x / 1000 for x in range(2, 14, 2)]  # [0.002, 0.004, 0.006, 0.008, 0.010, 0.012]
+MANIPULATION_THRESHOLD_VALUES = [x / 1000 for x in range(4, 16, 3)]  # [0.002, 0.004, 0.006, 0.008, 0.010, 0.012]
 MAX_CANDLES_VALUES = [15, 30]
-CONSECUTIVE_CANDLES_VALUES = [2, 3, 4]
-MIN_CANDLES_FOR_SECOND_CONDITION_VALUES = [5, 10, 15, 20]
-MAX_CANDLES_FOR_SECOND_CONDITION_VALUES = [15, 20, 25, 30]
-RISK_REWARD_RATIO_VALUES = [1.5]
+CONSECUTIVE_CANDLES_VALUES = [ 3, 4]
+MIN_CANDLES_FOR_SECOND_CONDITION_VALUES = [5, 10, 15 ]
+MAX_CANDLES_FOR_SECOND_CONDITION_VALUES = [10,15,20]
+RISK_REWARD_RATIO_VALUES = [1.5,2]
 
 # Veri dosyaları
 DATA_FILES = ["1yil.csv"]
@@ -205,10 +205,10 @@ def run_optimization():
     df.fillna(0, inplace=True)
 
     # Toplam skor hesaplama (mevcut ağırlıklar korunuyor)
-    df['total_score'] = (0.20 * df['norm_profit'] + 
+    df['total_score'] = (0.15 * df['norm_profit'] + 
                          0.15 * df['norm_trade_count'] + 
-                         0.20 * df['norm_success'] + 
-                         0.15 * df['norm_pf'] + 
+                         1.15 * df['norm_success'] + 
+                         2.15 * df['norm_pf'] + 
                          0.15 * df['norm_sharpe'] + 
                          0.15 * df['norm_drawdown'] + 
                          0.15 * df['norm_avg_profit']) * 100
